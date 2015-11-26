@@ -49,9 +49,9 @@
                 pejae_got               :: T
             ).
 
-:- pred parse(parser(T, NT, R), list(token(T)), result(R, parse_error(T)))
-    <= token_to_result(T, R).
-:- mode parse(in, in, out) is det.
+:- pred parse(parser(T, NT, R), list(T), list(token(T)),
+    result(R, parse_error(T))) <= token_to_result(T, R).
+:- mode parse(in, in, in, out) is det.
 
 %-----------------------------------------------------------------------%
 %-----------------------------------------------------------------------%
@@ -92,7 +92,7 @@
     ;       stack_t(T)
     ;       stack_reduce(int, func(list(R)) = R).
 
-parse(Parser, Input0, Result) :-
+parse(Parser, SkipTerminals, Input0, Result) :-
     Stack = [stack_nt(Parser ^ p_start)],
     (
         last(Input0, Last),
@@ -102,14 +102,14 @@ parse(Parser, Input0, Result) :-
     ;
         Input = Input0 ++ [token(Parser ^ p_eof_terminal, no, nil_context)]
     ),
-    parse(Parser, Input, Stack, [], Result).
+    parse(Parser, SkipTerminals, Input, Stack, [], Result).
 
-:- pred parse(parser(T, NT, R), list(token(T)), list(stack_item(T, NT, R)),
-        list(R), result(R, parse_error(T)))
+:- pred parse(parser(T, NT, R), list(T), list(token(T)),
+        list(stack_item(T, NT, R)), list(R), result(R, parse_error(T)))
     <= token_to_result(T, R).
-:- mode parse(in, in, in, in, out) is det.
+:- mode parse(in, in, in, in, in, out) is det.
 
-parse(Parser, Input0, Stack0, ResultStack0, Result) :-
+parse(Parser, SkipTerminals, Input0, Stack0, ResultStack0, Result) :-
     ( Stack0 = [Tos | Stack1],
         ( Tos = stack_t(TS),
             ( Input0 = [token(TI, MaybeString, Context) | Input],
@@ -117,7 +117,12 @@ parse(Parser, Input0, Stack0, ResultStack0, Result) :-
                     % Input and TOS match, discard both and proceed.
                     TokenResult = token_to_result(TI, MaybeString, Context),
                     ResultStack = [TokenResult | ResultStack0],
-                    parse(Parser, Input, Stack1, ResultStack, Result)
+                    parse(Parser, SkipTerminals, Input, Stack1, ResultStack,
+                        Result)
+                ; member(TI, SkipTerminals) ->
+                    % Skip over some tokens like EOF if they're unambigious.
+                    parse(Parser, SkipTerminals, Input, Stack0,
+                        ResultStack0, Result)
                 ;
                     % Not matched, parsing error.
                     Error = pe_unexpected_token([TS], TI),
@@ -136,7 +141,17 @@ parse(Parser, Input0, Stack0, ResultStack0, Result) :-
             ),
             ( table_search(Parser ^ p_table, NTS, Terminal, Entry) ->
                 Stack = Entry ^ te_new_stack_items ++ Stack1,
-                parse(Parser, Input0, Stack, ResultStack0, Result)
+                parse(Parser, SkipTerminals, Input0, Stack, ResultStack0,
+                    Result)
+            ;
+                Input0 = [token(TIPrime, _, _) | Input],
+                member(TIPrime, SkipTerminals)
+            ->
+                % Skip over some tokens like EOF if they're unambigious.
+                % We know it's unambigious because otherwise it would have
+                % been found in the table.
+                parse(Parser, SkipTerminals, Input, Stack0, ResultStack0,
+                    Result)
             ;
                 table_valid_terminals(Parser ^ p_table, NTS, ValidTerminals),
                 ( Input0 = [token(TIPrime, _, Context) | _],
@@ -152,7 +167,7 @@ parse(Parser, Input0, Stack0, ResultStack0, Result) :-
             reverse(Nodes0, Nodes),
             Node = Func(Nodes),
             ResultStack = [Node | ResultStack1],
-            parse(Parser, Input0, Stack1, ResultStack, Result)
+            parse(Parser, SkipTerminals, Input0, Stack1, ResultStack, Result)
         )
     ; Stack0 = [],
         ( Input0 = [],

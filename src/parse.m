@@ -204,7 +204,7 @@ ignore_tokens(token(comment, _)).
     result(plasma_ast, plasma_parse_error)::out) is det.
 
 parse_tokens(!.Tokens, Result) :-
-    parsing.parse(make_parser(plasma_bnf), !.Tokens, Result0),
+    parsing.parse(make_parser(plasma_bnf), skip_terminals, !.Tokens, Result0),
     ( Result0 = ok(PTNode),
         ( PTNode = module_ ->
             Result = ok(plasma_ast("", no, []))
@@ -226,6 +226,10 @@ plasma_bnf = bnf(module_, eof,
         bnf_production("module", module_, [t(module_)],
             (func(_) = module_))
     ]).
+
+:- func skip_terminals = list(token_type).
+
+skip_terminals = [newline].
 
 :- type pt_node
     --->    module_.
