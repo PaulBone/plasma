@@ -120,12 +120,14 @@ parse(Parser, Input0, Stack0, ResultStack0, Result) :-
             )
         ; Tos = stack_nt(NTS),
             % Check table
-            ( Input0 = [token(TI, _, _) | _],
-                Terminal = TI
+            ( Input0 = [token(TI1, _, _), token(TI2, _, _) | _]
+            ; Input0 = [token(TI1, _, _)],
+                TI2 = Parser ^ p_eof_terminal
             ; Input0 = [],
-                Terminal = Parser ^ p_eof_terminal
+                TI1 = Parser ^ p_eof_terminal,
+                TI2 = Parser ^ p_eof_terminal
             ),
-            ( if table_search(Parser ^ p_table, NTS, Terminal, Entry) then
+            ( if table_search(Parser ^ p_table, NTS, TI1, TI2, Entry) then
                 Stack = Entry ^ te_new_stack_items ++ Stack1,
                 parse(Parser, Input0, Stack, ResultStack0, Result)
             else
