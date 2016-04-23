@@ -43,23 +43,47 @@ make_parser(bnf(Start, EOFTerminal, Rules)) =
         io.nl(!IO)
     ),
 
-    make_leading_sets(FirstSets, Rules, map.init, LeadingSets),
+    det_insert(Start, make_singleton_set(eof),
+        map.init, FollowsSets0),
+    make_leading_and_follows_sets(FirstSets, Rules, map.init, LeadingSets,
+        FollowsSets0, FollowsSets),
+
     trace [compile_time(flag("debug-parser-table")), io(!IO)] (
         io.write_string("Leading sets:\n", !IO),
         foldl(print_set, LeadingSets, !IO),
         io.nl(!IO)
     ),
-
-    det_insert(Start, make_singleton_set(eof),
-        map.init, FollowSets0),
-    make_follow_sets(FirstSets, LeadingSets, Rules, FollowSets0, FollowSets),
     trace [compile_time(flag("debug-parser-table")), io(!IO)] (
         io.write_string("Follow sets:\n", !IO),
-        foldl(print_set, FollowSets, !IO),
+        foldl(print_set, FollowsSets, !IO),
         io.nl(!IO)
     ),
 
-    Table = make_table(Rules, EOFTerminal, FirstSets, LeadingSets, FollowSets).
+    Table = make_table(Rules, EOFTerminal, FirstSets, LeadingSets, FollowsSets).
+
+:- pred make_leading_and_follows_sets(map(NT, first_set(T))::in,
+    list(bnf_rule(T, NT, R))::in,
+    map(NT, leading_set(T))::in, map(NT, leading_set(T))::out,
+    map(NT, follows_set(T))::in, map(NT, follows_set(T))::out) is det.
+
+make_leading_and_follows_sets(FirstSets, Rules,
+        !LeadingSets, !FollowsSets) :-
+    LeadingSets0 = !.LeadingSets,
+    FollowsSets0 = !.FollowsSets,
+    make_leading_sets(FirstSets, Rules, !LeadingSets),
+    make_follows_sets(FirstSets, !.LeadingSets, Rules, !FollowsSets),
+    ( if
+        (
+            not equal(LeadingSets0, !.LeadingSets)
+        ;
+            not equal(FollowsSets0, !.FollowsSets)
+        )
+    then
+        make_leading_and_follows_sets(FirstSets, Rules, !LeadingSets,
+            !FollowsSets)
+    else
+        true
+    ).
 
 %-----------------------------------------------------------------------%
 
@@ -175,6 +199,9 @@ make_leading_sets_rule(FirstSets, Rule, Changed, LeadingSets0, LeadingSets) :-
         det_insert(LHS, Leading, LeadingSets0, LeadingSets)
     ).
 
+% XXX: Use follows information to add more information to the leading sets.
+% XXX: After that, we need to _replace_ these sets otherwise the lookahead
+% version will clash with the non-lookahead version.
 :- func leading(map(NT, first_set(T)), map(NT, leading_set(T)),
     list(bnf_atom(T, NT))) = leading_set(T).
 
@@ -205,53 +232,62 @@ leading(FirstSets, LeadingSets, [Atom | Atoms]) = Set :-
 
 %-----------------------------------------------------------------------%
 
-:- pred make_follow_sets(map(NT, first_set(T))::in, map(NT,
+:- pred make_follows_sets(map(NT, first_set(T))::in, map(NT,
     leading_set(T))::in, list(bnf_rule(T, NT, R))::in,
     map(NT, follows_set(T))::in, map(NT, follows_set(T))::out) is det.
 
-make_follow_sets(FirstSets, LeadingSets, Rules, !FollowSets) :-
-    map_foldl(make_follow_sets_2(FirstSets, LeadingSets), Rules, Changed,
-        !FollowSets),
+make_follows_sets(FirstSets, LeadingSets, Rules, !FollowsSets) :-
+    map_foldl(make_follows_sets_2(FirstSets, LeadingSets), Rules, Changed,
+        !FollowsSets),
     ( if member(yes, Changed) then
-        make_follow_sets(FirstSets, LeadingSets, Rules, !FollowSets)
+        make_follows_sets(FirstSets, LeadingSets, Rules, !FollowsSets)
     else
         true
     ).
 
-:- pred make_follow_sets_2(map(NT, first_set(T))::in,
+:- pred make_follows_sets_2(map(NT, first_set(T))::in,
     map(NT, leading_set(T))::in, bnf_rule(T, NT, R)::in,
     bool::out, map(NT, follows_set(T))::in, map(NT, follows_set(T))::out)
     is det.
 
-make_follow_sets_2(FirstSets, LeadingSets, Rule, Changed, !FollowSets) :-
-    foldl2(make_follow_sets_3(Rule ^ bnf_lhs, FirstSets, LeadingSets),
-        Rule ^ bnf_rhss, no, Changed, !FollowSets).
+make_follows_sets_2(FirstSets, LeadingSets, Rule, Changed, !FollowsSets) :-
+    foldl2(make_follows_sets_3(Rule ^ bnf_lhs, FirstSets, LeadingSets),
+        Rule ^ bnf_rhss, no, Changed, !FollowsSets).
 
-:- pred make_follow_sets_3(NT::in, map(NT, first_set(T))::in,
+:- pred make_follows_sets_3(NT::in, map(NT, first_set(T))::in,
     map(NT, leading_set(T))::in, bnf_rhs(T, NT, R)::in, bool::in, bool::out,
     map(NT, follows_set(T))::in, map(NT, follows_set(T))::out) is det.
 
-make_follow_sets_3(LHS, FirstSets, LeadingSets, RHS, !Changed, !FollowSets) :-
+make_follows_sets_3(LHS, FirstSets, LeadingSets, RHS, !Changed, !FollowsSets) :-
     bnf_rhs(Atoms, _) = RHS,
-    make_follow_sets_4(Atoms, LHS, FirstSets, LeadingSets, _, !Changed,
-        !FollowSets).
+    make_follows_sets_4(Atoms, LHS, FirstSets, LeadingSets, _, !Changed,
+        !FollowsSets).
 
-:- pred make_follow_sets_4(list(bnf_atom(T, NT))::in, NT::in,
+:- pred make_follows_sets_4(list(bnf_atom(T, NT))::in, NT::in,
     map(NT, first_set(T))::in, map(NT, leading_set(T))::in,
     follows_set(T)::out, bool::in, bool::out,
     map(NT, follows_set(T))::in, map(NT, follows_set(T))::out) is det.
 
-make_follow_sets_4([], LHS, _, _,
-        get_set_from_map_or_empty(FollowSets, LHS), !Changed, FollowSets,
-        FollowSets).
-make_follow_sets_4([t(T) | Atoms], LHS, FirstSets, LeadingSets,
-        set([one(T)]), !Changed, !FollowSets) :-
-    make_follow_sets_4(Atoms, LHS, FirstSets, LeadingSets, _, !Changed,
-        !FollowSets).
-make_follow_sets_4([nt(NT) | Atoms], LHS, FirstSets, LeadingSets,
-        UpdatedFollows, !Changed, !FollowSets) :-
-    make_follow_sets_4(Atoms, LHS, FirstSets, LeadingSets, NextFollows,
-        !Changed, !FollowSets),
+% XXX: I think this is incorrect.  The second case doesn't return the right
+% information, needed by the 3rd case.  maybe it doesn't need it though, if
+% we update leading sets from follows sets.
+make_follows_sets_4([], LHS, _, _,
+        get_set_from_map_or_empty(FollowsSets, LHS), !Changed, FollowsSets,
+        FollowsSets).
+make_follows_sets_4([t(T) | Atoms], LHS, FirstSets, LeadingSets,
+        UpdatedFollows, !Changed, !FollowsSets) :-
+    make_follows_sets_4(Atoms, LHS, FirstSets, LeadingSets, NextFollows,
+        !Changed, !FollowsSets),
+    UpdatedFollows = next_follows_to_follows(T, NextFollows).
+make_follows_sets_4([nt(NT) | Atoms], LHS, FirstSets, LeadingSets,
+        UpdatedFollows, !Changed, !FollowsSets) :-
+    ( if string(NT) = "module_qualifiers" then
+        true
+    else
+        true
+    ),
+    make_follows_sets_4(Atoms, LHS, FirstSets, LeadingSets, NextFollows,
+        !Changed, !FollowsSets),
 
     ( Atoms = [],
         % Copy the follows set for LHS to the follows set for NT.
@@ -265,17 +301,17 @@ make_follow_sets_4([nt(NT) | Atoms], LHS, FirstSets, LeadingSets,
             to_sorted_list(LeadingInAtoms)))
     ),
 
-    ( if search(!.FollowSets, NT, OldFollows) then
+    ( if search(!.FollowsSets, NT, OldFollows) then
         UpdatedFollows = union(OldFollows, Follows),
         ( if equal(UpdatedFollows, OldFollows) then
             true
         else
             !:Changed = yes,
-            det_update(NT, UpdatedFollows, !FollowSets)
+            det_update(NT, UpdatedFollows, !FollowsSets)
         )
     else
         UpdatedFollows = Follows,
-        det_insert(NT, UpdatedFollows, !FollowSets)
+        det_insert(NT, UpdatedFollows, !FollowsSets)
     ).
 
 :- func leading_to_follows(follows_set(T), leading_set_entry(T)) =
@@ -315,10 +351,10 @@ get_set_from_map_or_empty(Map, K) = Set :-
     map(NT, leading_set(T)), map(NT, follows_set(T))) =
     table(T, NT, table_entry(T, NT, R)).
 
-make_table(Rules, EOFTerminal, FirstSets, LeadingSets, FollowSets) =
+make_table(Rules, EOFTerminal, FirstSets, LeadingSets, FollowsSets) =
         Table :-
     Rows0 = sort_and_remove_dups(condense(map(
-        make_table_rows(EOFTerminal, FirstSets, LeadingSets, FollowSets),
+        make_table_rows(EOFTerminal, FirstSets, LeadingSets, FollowsSets),
         Rules))),
     condense_rows(Rows0, [], Rows),
     trace [compile_time(flag("debug-parser-table")), io(!IO)] (
@@ -340,11 +376,11 @@ make_table(Rules, EOFTerminal, FirstSets, LeadingSets, FollowSets) =
 :- func make_table_rows(T, map(NT, first_set(T)), map(NT, leading_set(T)),
     map(NT, follows_set(T)), bnf_rule(T, NT, R)) = list(table_row(T, NT, R)).
 
-make_table_rows(EOFTerminal, FirstSets, LeadingSets, FollowSets, Rule) = Rows :-
+make_table_rows(EOFTerminal, FirstSets, LeadingSets, FollowsSets, Rule) = Rows :-
     Name = Rule ^ bnf_name,
     LHS = Rule ^ bnf_lhs,
     Rows = condense(list.map(
-        make_table_rows_rhs(EOFTerminal, FirstSets, LeadingSets, FollowSets,
+        make_table_rows_rhs(EOFTerminal, FirstSets, LeadingSets, FollowsSets,
             Name, LHS),
         Rule ^ bnf_rhss)).
 
@@ -352,23 +388,23 @@ make_table_rows(EOFTerminal, FirstSets, LeadingSets, FollowSets, Rule) = Rows :-
     map(NT, follows_set(T)), string, NT, bnf_rhs(T, NT, R)) =
     list(table_row(T, NT, R)).
 
-make_table_rows_rhs(EOFTerminal, FirstSets, LeadingSets, FollowSets, Name,
+make_table_rows_rhs(EOFTerminal, FirstSets, LeadingSets, FollowsSets, Name,
         LHS, RHS) = Rows :-
     LeadingSet = leading(FirstSets, LeadingSets, RHS ^ bnf_rhs),
     Rows = condense(map(
-        make_table_rows_ls(EOFTerminal, FollowSets, Name, LHS, RHS),
+        make_table_rows_ls(EOFTerminal, FollowsSets, Name, LHS, RHS),
         to_sorted_list(LeadingSet))).
 
 :- func make_table_rows_ls(T, map(NT, follows_set(T)),
     string, NT, bnf_rhs(T, NT, R), leading_set_entry(T)) =
     list(table_row(T, NT, R)).
 
-make_table_rows_ls(EOFTerminal, FollowSets, Name, LHS, RHS, LeadingEntry) =
+make_table_rows_ls(EOFTerminal, FollowsSets, Name, LHS, RHS, LeadingEntry) =
         Rows :-
     ( LeadingEntry = empty,
-        lookup(FollowSets, LHS, FollowSet),
+        lookup(FollowsSets, LHS, FollowsSet),
         Rows = map(follows_entry_to_tr(EOFTerminal, LHS, Name, RHS),
-            to_sorted_list(FollowSet))
+            to_sorted_list(FollowsSet))
     ; LeadingEntry = one(FT),
         Rows = [table_row(LHS, FT, no, Name, RHS)]
     ; LeadingEntry = two(FT, ST),
