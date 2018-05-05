@@ -96,11 +96,31 @@
 
     % func_set_body(Varmap, Params, Body, !func).
     %
+    % This predicate is used in compilation stages before types are known.
+    % Therefore if it is used on a function with vartypes, it'll throw an
+    % exception rather than throw that information away or set a body that
+    % doesn't match the set of types.
+    %
 :- pred func_set_body(varmap::in, list(var)::in, expr::in,
     function::in, function::out) is det.
 
+    % func_set_body(Varmap, Params, Body, Vartypes, !func).
+    %
+    % This predicate sets the body and vartypes.
+    %
 :- pred func_set_body(varmap::in, list(var)::in, expr::in, map(var,
     type_)::in, function::in, function::out) is det.
+
+    % func_set_body_keep_vartypes(Varmap, Params, Body, !func).
+    %
+    % This predicate sets the body and keeps the Vartypes already saved in
+    % the function.  Only use it if you _know_ you have not possibly changed
+    % any type information or added any variables to the function body.  It
+    % can be used by such a pass both before and after type checking (eg
+    % arity checking).
+    %
+:- pred func_set_body_keep_vartypes(varmap::in, list(var)::in, expr::in,
+    function::in, function::out) is det.
 
 :- pred func_set_vartypes(map(var, type_)::in, function::in, function::out)
     is det.
@@ -270,6 +290,13 @@ func_set_body(Varmap, ParamNames, Expr, !Function) :-
     ),
     Defn = function_defn(Varmap, ParamNames, no, Expr),
     !Function ^ f_maybe_func_defn := Defn.
+
+func_set_body_keep_vartypes(Varmap, ParamNames, Expr, !Function) :-
+    ( if func_get_vartypes(!.Function, Vartypes) then
+        func_set_body(Varmap, ParamNames, Expr, Vartypes, !Function)
+    else
+        func_set_body(Varmap, ParamNames, Expr, !Function)
+    ).
 
 func_set_vartypes(VarTypes, !Function) :-
     MaybeDefn0 = !.Function ^ f_maybe_func_defn,
