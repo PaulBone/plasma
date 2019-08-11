@@ -74,6 +74,10 @@ class LBlock {
         const static size_t BLOCK_EMPTY = 0;
         size_t    block_type_or_size;
 
+        // Next block in the LBlock free list.
+        LBlock   *next;
+
+        // Free list for cells in the block, stored by index.
         const static int EMPTY_FREE_LIST = -1;
         int       free_list;
 
@@ -82,6 +86,7 @@ class LBlock {
 
         explicit Header(size_t cell_size_) :
             block_type_or_size(cell_size_),
+            next(nullptr),
             free_list(EMPTY_FREE_LIST)
         {
             assert(cell_size_ >= GC_MIN_CELL_SIZE);
@@ -117,6 +122,14 @@ class LBlock {
     size_t size() const {
         assert(is_in_use());
         return m_header.block_type_or_size;
+    }
+
+    LBlock *next() const {
+        assert(!is_in_use());
+        return m_header.next;
+    }
+    void clear_next() {
+        m_header.next = nullptr;
     }
 
     unsigned num_cells() const {
