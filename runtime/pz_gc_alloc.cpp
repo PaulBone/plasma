@@ -108,23 +108,13 @@ Heap::try_allocate(size_t size_in_words)
 LBlock *
 Heap::get_free_list(size_t size_in_words)
 {
-    return m_bblock->get_free_list(size_in_words);
-}
+    LBlock **lists = m_free_lists->get_free_list(size_in_words);
 
-LBlock *
-BBlock::get_free_list(size_t size_in_words)
-{
-    for (unsigned i = 0; i < m_wilderness; i++) {
-        LBlock *lblock = &(m_blocks[i]);
-
-        if (lblock->is_in_use() && lblock->size() == size_in_words &&
-                !lblock->is_full())
-        {
-            return lblock;
-        }
+    while (*lists && (*lists)->is_full()) {
+        *lists = (*lists)->next();
     }
 
-    return nullptr;
+    return *lists;
 }
 
 LBlock *
@@ -145,6 +135,7 @@ Heap::allocate_block(size_t size_in_words)
     #endif
 
     new(block) LBlock(m_options, size_in_words);
+    m_free_lists->add_free_list(size_in_words, block);
 
     return block;
 }

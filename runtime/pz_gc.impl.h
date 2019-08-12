@@ -9,19 +9,26 @@
 #ifndef PZ_GC_IMPL_H
 #define PZ_GC_IMPL_H
 
+#include <memory>
+
 #include "pz_gc.h"
 
 namespace pz {
 
 class CellPtr;
 class LBlock;
+class FreeLists;
 class BBlock;
 
 class Heap {
   private:
     const Options      &m_options;
+
     // For now there's exactly one big block.
     BBlock*             m_bblock;
+
+    std::unique_ptr<FreeLists>  m_free_lists;
+
     size_t              m_max_size;
     unsigned            m_collections;
 

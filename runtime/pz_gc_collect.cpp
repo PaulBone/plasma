@@ -123,15 +123,19 @@ Heap::mark(CellPtr &cell)
 void
 Heap::sweep()
 {
-    m_bblock->sweep(m_options);
+    m_free_lists->clear();
+
+    m_bblock->sweep(m_options, m_free_lists.get());
 }
 
 void
-BBlock::sweep(const Options &options)
+BBlock::sweep(const Options &options, FreeLists *free_lists)
 {
     for (unsigned i = 0; i < m_wilderness; i++) {
         if (m_blocks[i].sweep(options)) {
             m_blocks[i].make_unused();
+        } else {
+            free_lists->add_free_list(m_blocks[i].size(), &m_blocks[i]);
         }
     }
 }

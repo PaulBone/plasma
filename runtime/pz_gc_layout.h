@@ -131,6 +131,9 @@ class LBlock {
     void clear_next() {
         m_header.next = nullptr;
     }
+    void set_next(LBlock *next) {
+        m_header.next = next;
+    }
 
     unsigned num_cells() const {
         unsigned num = PAYLOAD_BYTES / (size() * WORDSIZE_BYTES);
@@ -257,6 +260,65 @@ class LBlock {
 static_assert(sizeof(LBlock) == GC_LBLOCK_SIZE);
 
 /*
+ * Calculations for size classes
+ * 
+ * Cells have a minimum size of GC_MIN_CELL_SIZE and maximum 
+ *
+ */
+static const unsigned GC_MAX_CELL_SIZE = LBlock::MAX_CELL_SIZE;
+static constexpr unsigned GC_CELL_CUTOFF = 16;
+
+constexpr unsigned fl_index1(unsigned size) {
+    return (size - GC_MIN_CELL_SIZE) / 2;
+}
+constexpr unsigned fl_index2(unsigned size) {
+    return (size - GC_CELL_CUTOFF) / 4;
+}
+
+class FreeLists {
+  public:
+
+    // Lists of blocks to allocate into.
+    static constexpr unsigned FL_NUM_1 = fl_index1(GC_CELL_CUTOFF);
+    LBlock*             m_blocks_1[FL_NUM_1];
+    // +1 becase we need the maximum cell size + 1 to compute the size of
+    // the array.
+    static constexpr unsigned FL_NUM_2 = fl_index2(GC_CELLS_PER_LBLOCK+1);
+    LBlock*             m_blocks_2[FL_NUM_2];
+
+    LBlock** get_free_list(unsigned size) {
+        assert(size >= GC_MIN_CELL_SIZE);
+        assert(size <= GC_MAX_CELL_SIZE);
+        if (size < GC_CELL_CUTOFF) {
+            return &m_blocks_1[fl_index1(size)];
+        } else {
+            return &m_blocks_2[fl_index2(size)];
+        }
+    }
+
+    void add_free_list(unsigned size, LBlock *block) {
+        assert(size == block->size());
+
+        LBlock **list = get_free_list(size);
+        if (*list) {
+            block->set_next(*list);
+        } else {
+            block->set_next(nullptr);
+        }
+        *list = block;
+    }
+
+    void clear() {
+        for (unsigned i = 0; i < FL_NUM_1; i++) {
+            m_blocks_1[i] = nullptr;
+        }
+        for (unsigned i = 0; i < FL_NUM_2; i++) {
+            m_blocks_2[i] = nullptr;
+        }
+    }
+};
+
+/*
  * Big blocks - BBlocks
  *
  * GC_BBLOCK_SIZE is also a power of two and is therefore a multiple of
@@ -301,7 +363,7 @@ class BBlock {
 
     LBlock * get_free_list(size_t size_in_words);
 
-    void sweep(const Options &options);
+    void sweep(const Options &options, FreeLists *free_lists);
 
 #ifdef PZ_DEV
     void print_usage_stats() const;
