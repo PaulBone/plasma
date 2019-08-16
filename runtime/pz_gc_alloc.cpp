@@ -110,6 +110,7 @@ Heap::get_free_list(size_t size_in_words)
 {
     LBlock **lists = m_free_lists->get_free_list(size_in_words);
 
+    // XXX: Assert alignment.
     while (*lists && (*lists)->is_full()) {
         *lists = (*lists)->next();
     }
