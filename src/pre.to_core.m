@@ -69,8 +69,6 @@ pre_to_core_stmts([Stmt | Stmts0], Expr, !Varmap) :-
         Expr = StmtExpr
     ; Stmts = [_ | _],
         pre_to_core_stmts(Stmts, StmtsExpr, !Varmap),
-        expect(set.empty(Stmt ^ s_info ^ si_def_vars), $file, $pred,
-            "These statements can't define variables"),
         Expr = expr(e_let([], StmtExpr, StmtsExpr),
             code_info_join(StmtExpr ^ e_info, StmtsExpr ^ e_info))
     ).
@@ -93,9 +91,12 @@ pre_to_core_stmt(Stmt, !Stmts, Expr, !Varmap) :-
     ; StmtType = s_assign(Vars0, PreExpr),
         map_foldl(var_or_make_var, Vars0, Vars, !Varmap),
         pre_to_core_expr(Context, PreExpr, LetExpr, !Varmap),
-        pre_to_core_stmts(!.Stmts, InExpr, !Varmap),
-        !:Stmts = [],
-        Expr = expr(e_let(Vars, LetExpr, InExpr), CodeInfo)
+        ( !.Stmts = [NextStmt | !:Stmts],
+            pre_to_core_stmt(NextStmt, !Stmts, InExpr, !Varmap),
+            Expr = expr(e_let(Vars, LetExpr, InExpr), CodeInfo)
+        ; !.Stmts = [],
+            Expr = expr(e_let(Vars, LetExpr, empty_tuple(Context)), CodeInfo)
+        )
     ; StmtType = s_return(Vars),
         Expr = expr(
             e_tuple(map((func(V) = expr(e_var(V), CodeInfo)), Vars)),
