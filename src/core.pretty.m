@@ -213,6 +213,7 @@ expr_pretty(Core, Varmap, Expr, Pretty, ThisExprNum, !ExprNum, !InfoMap) :-
         ; Exprs = [TExpr | TExprs],
             expr_pretty(Core, Varmap, TExpr, TExprPretty, _, !ExprNum,
                 !InfoMap),
+            % TODO: No expression numbers in tuples
             map2_foldl2(expr_pretty(Core, Varmap), TExprs, TExprsPretty,
                 _TExprsNums, !ExprNum, !InfoMap),
             PrettyExpr = p_parens(
@@ -280,6 +281,7 @@ expr_pretty(Core, Varmap, Expr, Pretty, ThisExprNum, !ExprNum, !InfoMap) :-
     ),
     Pretty = PrettyExpr.
 
+% XXX: Rename.
 :- func expr_num_pretty(int) = list(pretty).
 
 expr_num_pretty(Num) = NumPretty :-
