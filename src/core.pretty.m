@@ -232,7 +232,7 @@ expr_pretty(Core, Varmap, Expr, Pretty, !ExprNum, !InfoMap) :-
                 [p_cord(open_paren)], [],
                 [p_cord(close_paren)], [],
                 [p_cord(comma), p_nl_soft],
-                map(func(G) = p_group(G), [TExprPretty | TExprsPretty]))
+                map(func(G) = [p_group(G)], [TExprPretty | TExprsPretty]))
         )
     ; ExprType = e_lets(Lets, In),
         map_foldl2(let_pretty(Core, Varmap), Lets, LetsPretty0,
@@ -250,7 +250,7 @@ expr_pretty(Core, Varmap, Expr, Pretty, !ExprNum, !InfoMap) :-
         ; Callee = c_ho(CalleeVar),
             CalleePretty = p_cord(var_pretty(Varmap, CalleeVar))
         ),
-        ArgsPretty = map(func(V) = p_cord(var_pretty(Varmap, V)), Args),
+        ArgsPretty = map(func(V) = [p_cord(var_pretty(Varmap, V))], Args),
         PrettyExpr = p_parens(
             [CalleePretty, p_str("(")], [],
             [p_str(")")], [],
@@ -271,7 +271,7 @@ expr_pretty(Core, Varmap, Expr, Pretty, !ExprNum, !InfoMap) :-
                 [PrettyName, p_str("(")], [],
                 [p_str(")")], [],
                 [p_str(","), p_nl_soft],
-                map(func(V) = p_cord(var_pretty(Varmap, V)), Args))
+                map(func(V) = [p_cord(var_pretty(Varmap, V))], Args))
         )
     ; ExprType = e_closure(FuncId, Args),
         PrettyFunc = id_pretty(core_lookup_function_name(Core), FuncId),
@@ -279,8 +279,8 @@ expr_pretty(Core, Varmap, Expr, Pretty, !ExprNum, !InfoMap) :-
             [p_str("closure(")], [],
             [p_str(")")], [],
             [p_str(","), p_nl_soft],
-            [p_cord(PrettyFunc) |
-                map(func(V) = p_cord(var_pretty(Varmap, V)), Args)])
+            [[p_cord(PrettyFunc)] |
+                map(func(V) = [p_cord(var_pretty(Varmap, V))], Args)])
     ; ExprType = e_match(Var, Cases),
         VarPretty = p_cord(var_pretty(Varmap, Var)),
         map_foldl2(case_pretty(Core, Varmap), Cases, CasesPretty,
@@ -306,20 +306,22 @@ let_pretty(Core, Varmap, e_let(Vars, Let), Pretty,
     ; Vars = [_ | _],
         VarsPretty = list_join([p_str(","), p_nl_soft],
             map(func(V) = p_cord(var_pretty(Varmap, V)), Vars)),
-        Pretty = [p_group(VarsPretty)] ++ [p_nl_soft, p_str("="), p_spc] ++
+        Pretty = [p_group(
+            [p_group(VarsPretty)] ++ [p_nl_soft, p_str("="), p_spc] ++
             [p_group(LetPretty)]
+        )]
     ).
 
 :- pred case_pretty(core::in, varmap::in,
-    expr_case::in, pretty::out, int::in, int::out,
+    expr_case::in, list(pretty)::out, int::in, int::out,
     map(int, code_info)::in, map(int, code_info)::out) is det.
 
 case_pretty(Core, Varmap, e_case(Pattern, Expr), Pretty, !ExprNum,
         !InfoMap) :-
     PatternPretty = p_cord(pattern_pretty(Core, Varmap, Pattern)),
     expr_pretty(Core, Varmap, Expr, ExprPretty, !ExprNum, !InfoMap),
-    Pretty = p_group([p_str("case "), PatternPretty, p_str(" ->"),
-        p_nl_soft] ++ ExprPretty).
+    Pretty = [p_group([p_str("case "), PatternPretty, p_str(" ->"),
+        p_nl_soft] ++ ExprPretty)].
 
 :- func pattern_pretty(core, varmap, expr_pattern) = cord(string).
 

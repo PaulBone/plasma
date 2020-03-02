@@ -38,7 +38,7 @@
     %
 :- func p_parens(list(pretty), list(pretty),
                  list(pretty), list(pretty),
-                 list(pretty), list(pretty)) =
+                 list(pretty), list(list(pretty))) =
     list(pretty).
 
 :- func pretty(int, list(pretty)) = cord(string).
@@ -61,7 +61,7 @@ p_cord(Cord) = p_unit(Cord).
 
 p_parens(OuterLeft, InnerLeft, OuterRight, InnerRight, D, Items) =
     OuterLeft ++
-    [p_group(InnerLeft ++ list_join(D, Items) ++ InnerRight)] ++
+    [p_group(InnerLeft ++ condense(list_join([D], Items)) ++ InnerRight)] ++
     OuterRight.
 
 %-----------------------------------------------------------------------%
