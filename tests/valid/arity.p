@@ -82,6 +82,12 @@ func pm(x : Int) -> (Int, Int) {
     return x_abs, x_abs * -1
 }
 
+func pm2(x : Int) -> (Int, Int) {
+    // There is a bug compiling something that returns more than one item
+    // without listing them in the return statement.
+    return pm(x)
+}
+
 // Something that returns something may have its result thrown away.
 // Although this specific example should be a warning since the call to bar
 // also has no affects, it would be optimised away.
