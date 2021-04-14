@@ -31,6 +31,8 @@
 
 :- func q_name_from_dotted_string_det(string) = q_name.
 
+:- func q_name_to_string(q_name) = string.
+
     % Throws an exception if the strings can't be made into nq_names.
     %
 :- func q_name_from_strings(list(string)) = q_name.
@@ -40,7 +42,7 @@
     %
 :- func q_name_from_strings_2(list(string), string) = q_name.
 
-:- func q_name_to_string(q_name) = string.
+:- func q_name_to_nq_names(q_name) = list(nq_name).
 
 :- pred q_name_parts(q_name, maybe(q_name), nq_name).
 :- mode q_name_parts(in, out, out) is det.
@@ -138,11 +140,6 @@ q_name_from_dotted_string_det(Dotted) = Name :-
         unexpected($file, $pred, Error)
     ).
 
-q_name_from_strings(Strings) = q_name_from_list(map(nq_name_det, Strings)).
-
-q_name_from_strings_2(Module, Symbol) =
-    q_name_from_list_2(map(nq_name_det, Module), nq_name_det(Symbol)).
-
 q_name_to_string(QName) = String :-
     q_name_break(QName, Quals, Name),
     ( Quals = [_ | _],
@@ -151,6 +148,11 @@ q_name_to_string(QName) = String :-
     ; Quals = [],
         String = nq_name_to_string(Name)
     ).
+
+q_name_from_strings(Strings) = q_name_from_list(map(nq_name_det, Strings)).
+
+q_name_from_strings_2(Module, Symbol) =
+    q_name_from_list_2(map(nq_name_det, Module), nq_name_det(Symbol)).
 
 q_name_parts(QName, MaybeModule, Symbol) :-
     q_name_break(QName, ModuleParts, Symbol),

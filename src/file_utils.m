@@ -62,6 +62,7 @@
 
 :- import_module char.
 :- import_module list.
+:- import_module map.
 :- import_module maybe.
 :- import_module require.
 
@@ -73,24 +74,69 @@
 
 %-----------------------------------------------------------------------%
 
-:- type dir_info == maybe(list(string)).
+:- type dir_info == map(string, list(string)).
 
-init = no.
+init = map.init.
 
 %-----------------------------------------------------------------------%
 
-find_module_file(Path, Extension, ModuleName, Result, no, DirInfo, !IO) :-
-    get_dir_list(Path, MaybeDirList, !IO),
-    ( MaybeDirList = ok(DirInfo0),
-        find_module_file(Path, Extension, ModuleName, Result,
-            yes(DirInfo0), DirInfo, !IO)
-    ; MaybeDirList = error(DirError),
-        DirInfo = no,
-        Result = error(Path, DirError)
+find_module_file(Path, Extension, ModuleName, Result, !DirInfo, !IO) :-
+    q_name_parts(ModuleName, MaybeModulePart, NQName),
+    ( MaybeModulePart = no,
+        ModuleQuals = []
+    ; MaybeModulePart = yes(ModulePart),
+        ModuleQuals = q_name_to_nq_names(ModulePart)
+    ),
+
+    ( ModuleQuals = [],
+        find_module_file_in_dir(Path, Extension, ModuleName, Result,
+            !DirInfo, !IO)
+    ; ModuleQuals = [_ | _],
+        find_module_file_2(Path, Extension, [], ModuleQuals, NQName, Result,
+            !DirInfo, !IO)
     ).
-find_module_file(_, Extension, ModuleName, Result, yes(DirInfo), yes(DirInfo),
-        !IO) :-
-    filter(matching_module_file(ModuleName, Extension), DirInfo, Matches),
+
+find_module_file_2(BasePath, Extension, PathQuals, OtherQuals, NQName, Result,
+        !DirInfo, !IO) :-
+    Path = BasePath ++ "/" ++ q_name_to_string(q_name_from_nq_names(PathQuals)),
+
+
+%        foldl((pred(Path - NameRest::in, DI0::in, DI::out) is det :-
+%            ), PathPairs, !DirInfo),
+
+:- pred find_module_file_in_dir(string::in, string::in, q_name::in,
+    find_file_result::out, dir_info::in, dir_info::out, io::di, io::uo) is det.
+
+find_module_file_in_dir(Path, Extension, ModuleName, Result, !DirInfo, !IO) :-
+    memo_dir_info(Path,
+        find_module_file_in_list(Extension, ModuleName),
+        Result, !DirInfo, !IO).
+
+:- pred memo_dir_info(string,
+    pred(list(string), find_file_result), find_file_result,
+    dir_info, dir_info, io, io).
+:- mode memo_dir_info(in,
+    pred(in, out) is det, out,
+    in, out, di, uo) is det.
+
+memo_dir_info(Path, Pred, Result, !DirInfo, !IO) :-
+    ( if search(!.DirInfo, Path, DirList) then
+        Pred(DirList, Result)
+    else
+        get_dir_list(Path, MaybeDirList, !IO),
+        ( MaybeDirList = ok(DirList),
+            det_insert(Path, DirList, !DirInfo),
+            Pred(DirList, Result)
+        ; MaybeDirList = error(DirError),
+            Result = error(Path, DirError)
+        )
+    ).
+
+:- pred find_module_file_in_list(string::in, q_name::in, list(string)::in,
+    find_file_result::out) is det.
+
+find_module_file_in_list(Extension, ModuleName, DirList, Result) :-
+    filter(matching_module_file(ModuleName, Extension), DirList, Matches),
     ( Matches = [],
         Result = no
     ; Matches = [FileName],

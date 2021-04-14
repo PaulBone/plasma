@@ -20,5 +20,5 @@ modules = [Module_07, Module_07a]
 
 [heir_test]
 type = program
-modules = [HeirTest, Heir.Foo, Heir.Foo.Bar]
+modules = [HeirTest, Heir.Foo, Heir.Foo.Bar, Heir.Baz.Troz]
 
